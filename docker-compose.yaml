@@ -1,0 +1,45 @@
+version: "3"
+services:
+  zookeeper:
+    container_name: zookeeper
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    ports:
+      - "2181:2181"
+  broker:
+    image: confluentinc/cp-kafka:latest
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      # localhost:9092 for external connections to the broker
+      - "9092:9092"
+    expose: 
+      - 9092
+    environment:
+      # broker:29091 for connections internal on the docker network
+      KAFKA_BROKER_ID: 1
+      KAFKA_LISTENERS: BROKER://:29091, BROKER_HOST://:9092, BACKEND_LISTENER://:29092, ASSINAS_LISTENER://:29093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: BROKER:PLAINTEXT, BROKER_HOST:PLAINTEXT, BACKEND_LISTENER:PLAINTEXT, ASSINAS_LISTENER:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: BROKER://broker:29091, BROKER_HOST://localhost:9092, BACKEND_LISTENER://localhost:29092, ASSINAS_LISTENER://localhost:29093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_INTER_BROKER_LISTENER_NAME: BROKER
+  init-kafka:
+    image: confluentinc/cp-kafka:6.1.1
+    depends_on:
+      - broker
+    entrypoint: [ '/bin/sh', '-c' ]
+    command: |
+      "
+      # blocks until kafka is reachable
+      kafka-topics --bootstrap-server broker:29091 --list
+
+      echo -e 'Creating kafka topics'
+      kafka-topics --bootstrap-server broker:29091 --create --if-not-exists --topic tosign --replication-factor 1 --partitions 3
+      kafka-topics --bootstrap-server broker:29091 --create --if-not-exists --topic signed --replication-factor 1 --partitions 3
+      kafka-topics --bootstrap-server broker:29091 --create --if-not-exists --topic errors --replication-factor 1 --partitions 3
+
+      echo -e 'Successfully created the following topics:'
+      kafka-topics --bootstrap-server broker:29091 --list
+      "    
